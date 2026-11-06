@@ -45,7 +45,13 @@ case $PLATFORM in
         MTG_BIN="mtg-linux-${PLATFORM}"
         ;;
 esac
-MTG_MULTI_VER=$(curl -sfL "https://api.github.com/repos/mhsanaei/mtg-multi/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
+MTG_MULTI_API="https://api.github.com/repos/mhsanaei/mtg-multi/releases/latest"
+# GITHUB_TOKEN is optional and only avoids the 60 req/h anonymous API limit.
+if [ -n "$GITHUB_TOKEN" ]; then
+    MTG_MULTI_VER=$(curl -sfL -H "Authorization: Bearer $GITHUB_TOKEN" "$MTG_MULTI_API" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
+else
+    MTG_MULTI_VER=$(curl -sfL "$MTG_MULTI_API" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
+fi
 if [ -z "$MTG_MULTI_VER" ]; then
     echo "DockerInit: could not resolve the latest mtg-multi release tag" >&2
     exit 1
