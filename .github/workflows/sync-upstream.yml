@@ -1,0 +1,156 @@
+name: Sync fork with upstream
+
+# Merges mhsanaei/3x-ui@main into this fork, but only when the merge is clean.
+# A conflicted merge is never committed: the workflow opens (or updates) an
+# issue labelled `upstream-sync-conflict` and then stops running altogether
+# until that issue is closed, so the scheduled job does not retry the same
+# broken merge every day.
+
+on:
+  schedule:
+    # Daily at 04:00 UTC.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Run even if a conflict issue is still open"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+# Never let two syncs race each other; do not cancel one that is mid-push.
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: mhsanaei/3x-ui
+  UPSTREAM_BRANCH: main
+  CONFLICT_LABEL: upstream-sync-conflict
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for an unresolved conflict issue
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          if [ "$FORCE" = "true" ]; then
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Manual run with force=true: ignoring the conflict gate."
+            exit 0
+          fi
+          open=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "$CONFLICT_LABEL" \
+            --state open \
+            --json number \
+            --jq 'length')
+          if [ "${open:-0}" -gt 0 ]; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Sync paused: an open '$CONFLICT_LABEL' issue exists. Close it after resolving the conflicts to resume."
+          else
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A personal access token in SYNC_TOKEN makes the sync commit trigger the
+      # normal CI workflows; commits pushed with GITHUB_TOKEN intentionally do
+      # not start other workflow runs.
+      - name: Checkout fork
+        if: steps.gate.outputs.blocked != 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Merge upstream when it is conflict-free
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch --no-tags upstream "$UPSTREAM_BRANCH"
+          git checkout -B "$UPSTREAM_BRANCH" "origin/$UPSTREAM_BRANCH"
+
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "Already contains ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}; nothing to do."
+            exit 0
+          fi
+
+          # Dry run: stage the merge without committing. On conflicts, abort and
+          # report instead of leaving a half-merged tree behind.
+          set +e
+          git merge --no-commit --no-ff FETCH_HEAD
+          rc=$?
+          set -e
+
+          if [ "$rc" -ne 0 ]; then
+            files=$(git diff --name-only --diff-filter=U | sed 's/^/- /')
+            git merge --abort || true
+
+            gh label create "$CONFLICT_LABEL" \
+              --repo "$GITHUB_REPOSITORY" \
+              --force \
+              --color B60205 \
+              --description "Upstream sync is blocked by merge conflicts" >/dev/null 2>&1 || true
+
+            {
+              printf 'Automatic sync with %s@%s is blocked by merge conflicts.\n\n' \
+                "$UPSTREAM_REPO" "$UPSTREAM_BRANCH"
+              printf 'Conflicting files:\n\n%s\n\n' "$files"
+              printf 'Resolve locally, then push the merge:\n\n'
+              printf '```bash\n'
+              printf 'git fetch upstream\n'
+              printf 'git merge upstream/main\n'
+              printf '# fix the conflicts, commit and push\n'
+              printf '```\n\n'
+              printf 'Close this issue once it is fixed. The scheduled sync skips while it is open,\n'
+              printf 'so the same failing merge is not retried every day.\n'
+            } > /tmp/issue-body.md
+
+            existing=$(gh issue list \
+              --repo "$GITHUB_REPOSITORY" \
+              --label "$CONFLICT_LABEL" \
+              --state open \
+              --json number \
+              --jq '.[0].number // empty')
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file /tmp/issue-body.md
+            else
+              gh issue create \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "Upstream sync blocked: merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}" \
+                --label "$CONFLICT_LABEL" \
+                --body-file /tmp/issue-body.md
+            fi
+
+            echo "::warning::Merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}; sync paused until the conflict issue is closed."
+            exit 0
+          fi
+
+          git commit -m "chore: sync with upstream ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"
+          git push origin "HEAD:${UPSTREAM_BRANCH}"
+
+          for number in $(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "$CONFLICT_LABEL" \
+            --state open \
+            --json number \
+            --jq '.[].number'); do
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" \
+              --comment "Resolved: ${UPSTREAM_REPO}@${UPSTREAM_BRANCH} merged cleanly."
+          done
