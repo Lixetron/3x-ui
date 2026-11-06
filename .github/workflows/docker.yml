@@ -3,25 +3,16 @@ name: Build Docker image
 # Builds and publishes ghcr.io/<owner>/<repo> (this fork), not the upstream
 # registries. No repository secrets are required: GHCR is authenticated with
 # the workflow's own GITHUB_TOKEN.
+#
+# Release-only, like upstream: a version tag is what produces a publishable
+# image. `workflow_dispatch` exists to build any branch on demand without
+# tagging it.
 
 on:
   workflow_dispatch:
   push:
     tags:
       - "v*.*.*"
-    branches:
-      - main
-    # Path filters are ignored for tag pushes, so a release tag always builds.
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - "**.sh"
-      - "frontend/**"
-      - "internal/web/**"
-      - "Dockerfile"
-      - ".dockerignore"
-      - ".github/workflows/docker.yml"
 
 permissions:
   contents: read
@@ -53,13 +44,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
-            # `latest` follows release tags; `edge` tracks the default branch.
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=edge,enable={{is_default_branch}}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
