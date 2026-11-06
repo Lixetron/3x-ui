@@ -1,5 +1,13 @@
 [English](/README.md) | [فارسی](/README.fa_IR.md) | [العربية](/README.ar_EG.md) | [中文](/README.zh_CN.md) | [Español](/README.es_ES.md) | [Русский](/README.ru_RU.md) | [Türkçe](/README.tr_TR.md)
 
+> [!NOTE]
+> **Это форк.** Репозиторий — личный форк
+> [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui). Сама панель — функции,
+> исправления, документация и релизы — работа upstream-проекта. Здесь изменены
+> только сборка и публикация, поэтому **об ошибках панели и пожеланиях по
+> функциям пишите в upstream**. Отличия — в разделе
+> [Этот форк](#этот-форк).
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./media/3x-ui-dark.png">
@@ -8,10 +16,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MHSanaei/3x-ui/releases"><img src="https://img.shields.io/github/v/release/mhsanaei/3x-ui" alt="Release"></a>
-  <a href="https://github.com/MHSanaei/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/mhsanaei/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/mhsanaei/3x-ui.svg" alt="GO Version"></a>
-  <a href="https://github.com/MHSanaei/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/mhsanaei/3x-ui/total.svg" alt="Downloads"></a>
+  <a href="https://github.com/Lixetron/3x-ui/releases"><img src="https://img.shields.io/github/v/release/Lixetron/3x-ui?include_prereleases" alt="Release"></a>
+  <a href="https://github.com/Lixetron/3x-ui/actions/workflows/docker.yml"><img src="https://img.shields.io/github/actions/workflow/status/Lixetron/3x-ui/docker.yml.svg" alt="Docker build"></a>
+  <a href="https://github.com/Lixetron/3x-ui/actions/workflows/sync-upstream.yml"><img src="https://img.shields.io/github/actions/workflow/status/Lixetron/3x-ui/sync-upstream.yml.svg" alt="Upstream sync"></a>
+  <a href="https://github.com/Lixetron/3x-ui/pkgs/container/3x-ui"><img src="https://img.shields.io/badge/ghcr.io-lixetron%2F3x-ui-2496ED?logo=docker&logoColor=white" alt="Container image"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
   <a href="https://docs.sanaei.dev"><img src="https://img.shields.io/badge/docs-docs.sanaei.dev-22d3ee" alt="Documentation"></a>
@@ -23,6 +31,41 @@
 
 > [!IMPORTANT]
 > Этот проект предназначен только для личного использования. Пожалуйста, не используйте его в незаконных целях или в производственной среде.
+
+## Этот форк
+
+Upstream: **[MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui)**. Код панели не
+менялся — все отличия в CI, упаковке и автоматизации релизов:
+
+- **Контейнерный образ** — каждый тег `v*.*.*` собирается под `linux/amd64` и
+  `linux/arm64` и публикуется в
+  [`ghcr.io/lixetron/3x-ui`](https://github.com/Lixetron/3x-ui/pkgs/container/3x-ui)
+  (публичный, `docker login` на сервере не нужен).
+- **Релизные теги** — когда upstream выпускает релиз, ежедневная синхронизация
+  переносит самый свежий тег `vX.Y.Z` на `main` этого форка. Поэтому образы
+  соответствуют версиям upstream, но собираются из HEAD форка — вместе с
+  локальными исправлениями сборки.
+- **Автосинхронизация с upstream** — по расписанию (ежедневно в 04:00 UTC)
+  workflow забирает `main` upstream и сначала делает сухой прогон merge. Чистый
+  merge — коммит пушится в форк. Конфликт — ничего не мержится, открывается issue
+  с меткой
+  [`upstream-sync-conflict`](https://github.com/Lixetron/3x-ui/issues?q=label%3Aupstream-sync-conflict),
+  и синхронизация пропускается, пока issue не закрыт.
+- **Устойчивость сборки** — `DockerInit.sh` может принимать GitHub-токен, чтобы
+  не упираться в анонимный лимит API при определении версии mtg-multi; локальная
+  сборка без токена работает как раньше.
+
+Теги образов:
+
+| Тег | Из чего собран | Когда использовать |
+| --- | --- | --- |
+| `3.11.0` | релизный тег | фиксированная версия |
+| `3.11` | релизный тег | последний патч минорной версии |
+| `latest` | самый свежий релизный тег | «плавающий» стабильный |
+| `sha-1a2b3c4` | конкретный коммит | отладка сборки |
+
+Ручной запуск (`workflow_dispatch`) публикует теги с именем ветки (например,
+`main`) и sha коммита — это не релизный поток.
 
 ## Возможности
 
@@ -72,6 +115,11 @@
 </details>
 
 ## Быстрый старт
+
+> [!NOTE]
+> `install.sh` ставит **upstream-релизы** из `MHSanaei/3x-ui`. Этот форк
+> распространяется как контейнерный образ — см. [Docker](#docker) — либо
+> собирайте из исходников: [Сборка этого форка](#сборка-этого-форка).
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
@@ -137,6 +185,27 @@ systemctl restart x-ui
 
 ### Docker
 
+Этот форк публикует образ `ghcr.io/lixetron/3x-ui`; таблица тегов — в разделе
+[Этот форк](#этот-форк). Запуск без compose:
+
+```bash
+docker run -d --name 3xui \
+  --cap-add=NET_ADMIN --cap-add=NET_RAW \
+  -p 2053:2053 \
+  -v "$PWD/db/:/etc/x-ui/" \
+  -v "$PWD/cert/:/root/cert/" \
+  -v "$PWD/acme/:/root/.acme.sh/" \
+  ghcr.io/lixetron/3x-ui:latest
+```
+
+Либо зафиксируйте версию в `docker-compose.yml`, заменив `build:` на `image:`:
+
+```yaml
+services:
+  3xui:
+    image: ghcr.io/lixetron/3x-ui:3.11.0
+```
+
 Команда по умолчанию `docker compose up -d` продолжает использовать SQLite. Чтобы запустить со встроенным сервисом PostgreSQL, раскомментируйте две строки переменных окружения `XUI_DB_*` в `docker-compose.yml` и запустите с профилем:
 
 ```bash
@@ -146,8 +215,22 @@ docker compose --profile postgres up -d
 Образ включает Fail2ban (включён по умолчанию) для применения **лимитов IP** по каждому клиенту. Fail2ban блокирует нарушителей с помощью `iptables`, что требует возможности `NET_ADMIN`. `docker-compose.yml` уже предоставляет её через `cap_add`; если вы вместо этого запускаете контейнер через `docker run`, добавьте возможности самостоятельно, иначе блокировки будут регистрироваться, но никогда не применяться:
 
 ```bash
-docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/mhsanaei/3x-ui
+docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/lixetron/3x-ui:latest
 ```
+
+## Сборка этого форка
+
+Нужны Go (см. `go.mod`), Node (см. `.nvmrc`) и C-компилятор — драйвер SQLite
+(`mattn/go-sqlite3`) использует cgo. Фронтенд нужно собрать первым: `internal/web`
+встраивает бандл через `//go:embed`.
+
+```bash
+make build      # бандл Vite в internal/web/dist, затем go build
+make verify     # полный локальный CI-гейт (линтеры, typecheck, тесты, сборка)
+```
+
+`make help` покажет отдельные цели (`build-fe`, `test`, `test-fe`, `race`,
+`node-e2e`, …).
 
 ## Переменные окружения
 
@@ -201,7 +284,11 @@ English · فارسی · العربية · 中文（简体） · 中文（繁體
 - [terraform-provider-3x-ui](https://github.com/batonogov/terraform-provider-threexui) (Лицензия: **MIT**): _Управление входящими, клиентами, настройками панели и конфигурацией Xray через код с помощью Terraform / OpenTofu._
 - [3X-UI Manager](https://github.com/yukh975/3X-UI-Manager) (Лицензия: **MIT**): _Нативный Android-клиент для 3x-ui — дашборд, входящие, клиенты с QR, узлы и управление несколькими панелями. Доступен в F-Droid._
 
-## Поддержка проекта
+## Поддержка upstream
+
+Этот форк не принимает пожертвования. Панель поддерживает
+[MHSanaei](https://github.com/MHSanaei); если 3X-UI вам полезен, поддержите
+оригинальный проект:
 
 **Если этот проект полезен для вас, вы можете поставить ему**:star2:
 
@@ -213,19 +300,3 @@ English · فارسی · العربية · 中文（简体） · 中文（繁體
 <a href="https://nowpayments.io/donation/hsanaei" target="_blank" rel="noreferrer noopener">
    <img src="./media/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
 </a>
-
-## История звёзд
-
-<a href="https://www.star-history.com/?repos=mhsanaei%2F3x-ui&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=mhsanaei/3x-ui&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=mhsanaei/3x-ui&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=mhsanaei/3x-ui&type=date&legend=top-left" />
- </picture>
-</a>
-
-<p align="center">
- <a href="https://www.star-history.com/mhsanaei/3x-ui">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/badge?repo=MHSanaei/3x-ui&type=rank&theme=dark" /><source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/badge?repo=MHSanaei/3x-ui&type=rank" /><img alt="Star History Rank" src="https://api.star-history.com/badge?repo=MHSanaei/3x-ui&type=rank" /></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/badge?repo=MHSanaei/3x-ui&type=trending&theme=dark" /><source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/badge?repo=MHSanaei/3x-ui&type=trending" /><img alt="GitHub Trending Repository of the Day" src="https://api.star-history.com/badge?repo=MHSanaei/3x-ui&type=trending" /></picture>
- </a>
-</p>
