@@ -20,6 +20,9 @@ on:
 permissions:
   contents: write
   issues: write
+  # Lets the sync dispatch the Docker build for a newly adopted release tag:
+  # pushes made with GITHUB_TOKEN do not start workflows by themselves.
+  actions: write
 
 # Never let two syncs race each other; do not cancel one that is mid-push.
 concurrency:
@@ -144,6 +147,28 @@ jobs:
 
           git commit -m "chore: sync with upstream ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"
           git push origin "HEAD:${UPSTREAM_BRANCH}"
+
+          # Adopt the newest upstream release tag as a tag on the fork's main so
+          # the published image is built from fork HEAD (with this repo's
+          # Dockerfile/CI fixes) instead of the upstream release tree. Older
+          # upstream tags are not mirrored: they would only add noise.
+          newest=$(git ls-remote --tags --refs upstream "refs/tags/v*.*.*" \
+            | sed 's#.*refs/tags/##' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n 1)
+          if [ -n "$newest" ] && ! git rev-parse -q --verify "refs/tags/${newest}" >/dev/null; then
+            git tag -a "$newest" -m "$newest"
+            git push origin "refs/tags/${newest}"
+            # A GITHUB_TOKEN push does not start workflows, so build explicitly.
+            # With SYNC_TOKEN the push starts it too; the shared concurrency
+            # group keeps it to a single run.
+            gh workflow run docker.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$newest" \
+              || echo "::warning::Pushed tag ${newest} but could not dispatch the Docker build."
+            echo "::notice::Adopted upstream release tag ${newest} and dispatched the image build."
+          fi
 
           for number in $(gh issue list \
             --repo "$GITHUB_REPOSITORY" \
