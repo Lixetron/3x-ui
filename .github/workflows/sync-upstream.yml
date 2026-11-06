@@ -48,12 +48,15 @@ jobs:
             echo "::notice::Manual run with force=true: ignoring the conflict gate."
             exit 0
           fi
-          open=$(gh issue list \
-            --repo "$GITHUB_REPOSITORY" \
-            --label "$CONFLICT_LABEL" \
-            --state open \
-            --json number \
-            --jq 'length')
+          # Plain REST instead of `gh issue list`: the CLI refuses to run when
+          # GraphQL reports the fork's issue tracker as disabled, even while the
+          # REST API keeps working.
+          if ! open=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues?state=open&labels=${CONFLICT_LABEL}&per_page=100" \
+            --jq 'length'); then
+            echo "::warning::Could not query issues; continuing without the conflict gate."
+            open=0
+          fi
           if [ "${open:-0}" -gt 0 ]; then
             echo "blocked=true" >> "$GITHUB_OUTPUT"
             echo "::warning::Sync paused: an open '$CONFLICT_LABEL' issue exists. Close it after resolving the conflicts to resume."
@@ -122,20 +125,17 @@ jobs:
               printf 'so the same failing merge is not retried every day.\n'
             } > /tmp/issue-body.md
 
-            existing=$(gh issue list \
-              --repo "$GITHUB_REPOSITORY" \
-              --label "$CONFLICT_LABEL" \
-              --state open \
-              --json number \
+            existing=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/issues?state=open&labels=${CONFLICT_LABEL}&per_page=1" \
               --jq '.[0].number // empty')
             if [ -n "$existing" ]; then
-              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file /tmp/issue-body.md
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${existing}/comments" \
+                -F body=@/tmp/issue-body.md
             else
-              gh issue create \
-                --repo "$GITHUB_REPOSITORY" \
-                --title "Upstream sync blocked: merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}" \
-                --label "$CONFLICT_LABEL" \
-                --body-file /tmp/issue-body.md
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues" \
+                -f "title=Upstream sync blocked: merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}" \
+                -F body=@/tmp/issue-body.md \
+                -f "labels[]=${CONFLICT_LABEL}"
             fi
 
             echo "::warning::Merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}; sync paused until the conflict issue is closed."
@@ -145,12 +145,10 @@ jobs:
           git commit -m "chore: sync with upstream ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"
           git push origin "HEAD:${UPSTREAM_BRANCH}"
 
-          for number in $(gh issue list \
-            --repo "$GITHUB_REPOSITORY" \
-            --label "$CONFLICT_LABEL" \
-            --state open \
-            --json number \
+          for number in $(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues?state=open&labels=${CONFLICT_LABEL}&per_page=100" \
             --jq '.[].number'); do
-            gh issue close "$number" --repo "$GITHUB_REPOSITORY" \
-              --comment "Resolved: ${UPSTREAM_REPO}@${UPSTREAM_BRANCH} merged cleanly."
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" \
+              -f "body=Resolved: ${UPSTREAM_REPO}@${UPSTREAM_BRANCH} merged cleanly."
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/${number}" -f state=closed
           done
