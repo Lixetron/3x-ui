@@ -1,4 +1,4 @@
-[English](/README.md) | [فارسی](/README.fa_IR.md) | [العربية](/README.ar_EG.md) | [中文](/README.zh_CN.md) | [Español](/README.es_ES.md) | [Русский](/README.ru_RU.md) | [Türkçe](/README.tr_TR.md)
+[English](/README.md) | [Русский](/README.ru_RU.md)
 
 > [!NOTE]
 > **Это форк.** Репозиторий — личный форк
@@ -54,6 +54,9 @@ Upstream: **[MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui)**. Код пан
 - **Устойчивость сборки** — `DockerInit.sh` может принимать GitHub-токен, чтобы
   не упираться в анонимный лимит API при определении версии mtg-multi; локальная
   сборка без токена работает как раньше.
+- **Язык документации** — здесь поддерживаются только английский и русский
+  README. Остальные переводы upstream удалены: они устаревают и описывают
+  upstream, а не этот форк.
 
 Теги образов:
 

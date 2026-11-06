@@ -1,4 +1,4 @@
-[English](/README.md) | [فارسی](/README.fa_IR.md) | [العربية](/README.ar_EG.md) | [中文](/README.zh_CN.md) | [Español](/README.es_ES.md) | [Русский](/README.ru_RU.md) | [Türkçe](/README.tr_TR.md)
+[English](/README.md) | [Русский](/README.ru_RU.md)
 
 > [!NOTE]
 > **Fork notice.** This repository is a personal fork of
@@ -51,6 +51,9 @@ modified here — all differences are in CI, packaging and release automation:
 - **Build hardening** — `DockerInit.sh` can take a GitHub token to avoid the
   anonymous API rate limit while resolving the mtg-multi release; local builds
   without a token behave exactly like before.
+- **Documentation language** — only the English and Russian READMEs are kept
+  here. Upstream's other translations were removed because they would go stale
+  and describe upstream instead of this fork.
 
 Image tags:
 

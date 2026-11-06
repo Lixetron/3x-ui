@@ -102,47 +102,66 @@ jobs:
           set -e
 
           if [ "$rc" -ne 0 ]; then
-            files=$(git diff --name-only --diff-filter=U | sed 's/^/- /')
-            git merge --abort || true
+            conflicts=$(git diff --name-only --diff-filter=U)
 
-            gh label create "$CONFLICT_LABEL" \
-              --repo "$GITHUB_REPOSITORY" \
-              --force \
-              --color B60205 \
-              --description "Upstream sync is blocked by merge conflicts" >/dev/null 2>&1 || true
+            # This fork removed upstream's README translations on purpose. When
+            # upstream edits one of them the merge reports modify/delete; keep
+            # the deletion and finish the merge. Real conflicts still pause the
+            # sync and open an issue.
+            other=$(printf '%s\n' "$conflicts" \
+              | grep -vE '^README\.(fa_IR|ar_EG|zh_CN|es_ES|tr_TR)\.md$' \
+              | grep -c . || true)
 
-            {
-              printf 'Automatic sync with %s@%s is blocked by merge conflicts.\n\n' \
-                "$UPSTREAM_REPO" "$UPSTREAM_BRANCH"
-              printf 'Conflicting files:\n\n%s\n\n' "$files"
-              printf 'Resolve locally, then push the merge:\n\n'
-              printf '```bash\n'
-              printf 'git fetch upstream\n'
-              printf 'git merge upstream/main\n'
-              printf '# fix the conflicts, commit and push\n'
-              printf '```\n\n'
-              printf 'Close this issue once it is fixed. The scheduled sync skips while it is open,\n'
-              printf 'so the same failing merge is not retried every day.\n'
-            } > /tmp/issue-body.md
-
-            existing=$(gh issue list \
-              --repo "$GITHUB_REPOSITORY" \
-              --label "$CONFLICT_LABEL" \
-              --state open \
-              --json number \
-              --jq '.[0].number // empty')
-            if [ -n "$existing" ]; then
-              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file /tmp/issue-body.md
+            if [ "$other" -eq 0 ]; then
+              printf '%s\n' "$conflicts" | while IFS= read -r file; do
+                if [ -n "$file" ]; then
+                  git rm -q -- "$file"
+                fi
+              done
+              echo "::notice::Kept upstream README translations deleted."
             else
-              gh issue create \
-                --repo "$GITHUB_REPOSITORY" \
-                --title "Upstream sync blocked: merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}" \
-                --label "$CONFLICT_LABEL" \
-                --body-file /tmp/issue-body.md
-            fi
+              files=$(printf '%s\n' "$conflicts" | sed 's/^/- /')
+              git merge --abort || true
 
-            echo "::warning::Merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}; sync paused until the conflict issue is closed."
-            exit 0
+              gh label create "$CONFLICT_LABEL" \
+                --repo "$GITHUB_REPOSITORY" \
+                --force \
+                --color B60205 \
+                --description "Upstream sync is blocked by merge conflicts" >/dev/null 2>&1 || true
+
+              {
+                printf 'Automatic sync with %s@%s is blocked by merge conflicts.\n\n' \
+                  "$UPSTREAM_REPO" "$UPSTREAM_BRANCH"
+                printf 'Conflicting files:\n\n%s\n\n' "$files"
+                printf 'Resolve locally, then push the merge:\n\n'
+                printf '```bash\n'
+                printf 'git fetch upstream\n'
+                printf 'git merge upstream/main\n'
+                printf '# fix the conflicts, commit and push\n'
+                printf '```\n\n'
+                printf 'Close this issue once it is fixed. The scheduled sync skips while it is open,\n'
+                printf 'so the same failing merge is not retried every day.\n'
+              } > /tmp/issue-body.md
+
+              existing=$(gh issue list \
+                --repo "$GITHUB_REPOSITORY" \
+                --label "$CONFLICT_LABEL" \
+                --state open \
+                --json number \
+                --jq '.[0].number // empty')
+              if [ -n "$existing" ]; then
+                gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file /tmp/issue-body.md
+              else
+                gh issue create \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --title "Upstream sync blocked: merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}" \
+                  --label "$CONFLICT_LABEL" \
+                  --body-file /tmp/issue-body.md
+              fi
+
+              echo "::warning::Merge conflicts with ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}; sync paused until the conflict issue is closed."
+              exit 0
+            fi
           fi
 
           git commit -m "chore: sync with upstream ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"
