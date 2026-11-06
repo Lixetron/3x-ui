@@ -104,21 +104,36 @@ jobs:
           if [ "$rc" -ne 0 ]; then
             conflicts=$(git diff --name-only --diff-filter=U)
 
-            # This fork removed upstream's README translations on purpose. When
-            # upstream edits one of them the merge reports modify/delete; keep
-            # the deletion and finish the merge. Real conflicts still pause the
-            # sync and open an issue.
-            other=$(printf '%s\n' "$conflicts" \
-              | grep -vE '^README\.(fa_IR|ar_EG|zh_CN|es_ES|tr_TR)\.md$' \
-              | grep -c . || true)
+            # Paths this fork deletes on purpose: upstream's README translations
+            # and the sponsor/ads feature. When upstream edits one of them the
+            # merge reports modify/delete; keep the deletion and finish the
+            # merge. Any other conflict still pauses the sync and opens an issue.
+            intentionally_deleted() {
+              case "$1" in
+                README.fa_IR.md | README.ar_EG.md | README.zh_CN.md | README.es_ES.md | README.tr_TR.md) ;;
+                frontend/src/components/sponsor/* | frontend/src/pages/sponsors/*) ;;
+                frontend/src/api/queries/useSponsorsQuery.ts) ;;
+                frontend/src/lib/sponsors.ts | frontend/src/test/sponsors.test.tsx) ;;
+                internal/web/service/panel/sponsor.go | internal/web/service/panel/sponsor_test.go) ;;
+                *) return 1 ;;
+              esac
+              return 0
+            }
+
+            other=0
+            while IFS= read -r file; do
+              if [ -n "$file" ] && ! intentionally_deleted "$file"; then
+                other=1
+              fi
+            done <<< "$conflicts"
 
             if [ "$other" -eq 0 ]; then
-              printf '%s\n' "$conflicts" | while IFS= read -r file; do
+              while IFS= read -r file; do
                 if [ -n "$file" ]; then
                   git rm -q -- "$file"
                 fi
-              done
-              echo "::notice::Kept upstream README translations deleted."
+              done <<< "$conflicts"
+              echo "::notice::Kept intentionally deleted upstream files deleted."
             else
               files=$(printf '%s\n' "$conflicts" | sed 's/^/- /')
               git merge --abort || true

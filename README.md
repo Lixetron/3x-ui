@@ -33,9 +33,13 @@ Built as an enhanced fork of the original X-UI project, 3X-UI adds broader proto
 
 ## This fork
 
-Upstream: **[MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui)**. No panel code is
-modified here — all differences are in CI, packaging and release automation:
+Upstream: **[MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui)**. The panel is
+upstream's work; this fork makes a deliberate, small set of changes on top of it:
 
+- **No sponsor placements** — the in-panel sponsor/ads feature is removed: the
+  sponsor card and slot components, the sponsors page, the `sponsors` query, and
+  the panel's `sponsor` API endpoint. The panel does not fetch or display any
+  advertising.
 - **Container image** — every `v*.*.*` tag is built for `linux/amd64` and
   `linux/arm64` and published to
   [`ghcr.io/lixetron/3x-ui`](https://github.com/Lixetron/3x-ui/pkgs/container/3x-ui)
@@ -47,7 +51,9 @@ modified here — all differences are in CI, packaging and release automation:
   upstream `main` and dry-runs the merge first. Clean merge → it is pushed to this
   fork. Conflicts → nothing is merged, an
   [`upstream-sync-conflict` issue](https://github.com/Lixetron/3x-ui/issues?q=label%3Aupstream-sync-conflict)
-  is opened, and further syncs are skipped until that issue is closed.
+  is opened, and further syncs are skipped until that issue is closed. The
+  usual sources of real conflicts are upstream's panel translation files and the
+  generated API/codegen artifacts, which this fork also modifies.
 - **Build hardening** — `DockerInit.sh` can take a GitHub token to avoid the
   anonymous API rate limit while resolving the mtg-multi release; local builds
   without a token behave exactly like before.
