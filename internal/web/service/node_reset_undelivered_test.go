@@ -340,6 +340,13 @@ func TestNodeResetDeliveryDoesNotHoldTheRequestBehindASilentNode(t *testing.T) {
 	if took := time.Since(start); took > 2*time.Second {
 		t.Fatalf("the reset request took %v behind a silent node", took)
 	}
+	// Returning early is the point above, but the delivery it left running still
+	// holds the per-node lock for the rest of its push budget. Wait for it here:
+	// a later test reuses node id 1 in a fresh database, and the stale lock would
+	// make that test's own delivery block and report the node received nothing.
+	if err := (&InboundService{}).DeliverNodeResets(context.Background(), node.Id, &fakeNodeRuntime{}); err != nil {
+		t.Fatalf("drain the background reset delivery: %v", err)
+	}
 }
 
 // stallingUpdateRuntime never answers an inbound update until its context ends.
