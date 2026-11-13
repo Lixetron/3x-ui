@@ -67,6 +67,13 @@ jobs:
       # A personal access token in SYNC_TOKEN makes the sync commit trigger the
       # normal CI workflows; commits pushed with GITHUB_TOKEN intentionally do
       # not start other workflow runs.
+      #
+      # SYNC_TOKEN must be allowed to push workflow files as well: a fine-grained
+      # PAT needs Contents: read/write *and* Workflows: read/write, a classic PAT
+      # needs the `repo` and `workflow` scopes, and a GitHub App token needs the
+      # Workflows repository permission (re-approved after it is added). The
+      # default GITHUB_TOKEN can never get it, so merges that pick up upstream's
+      # `.github/workflows` edits fail without this secret.
       - name: Checkout fork
         if: steps.gate.outputs.blocked != 'true'
         uses: actions/checkout@v7
@@ -79,6 +86,9 @@ jobs:
         if: steps.gate.outputs.blocked != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Empty when the secret is not configured; used to explain a rejected
+          # push instead of leaving the raw server error alone.
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
         run: |
           set -euo pipefail
           export GIT_TERMINAL_PROMPT=0
@@ -180,7 +190,24 @@ jobs:
           fi
 
           git commit -m "chore: sync with upstream ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"
-          git push origin "HEAD:${UPSTREAM_BRANCH}"
+
+          # GitHub rejects pushes that touch .github/workflows unless the token
+          # carries the workflows grant, which GITHUB_TOKEN cannot have. Stop
+          # with the fix instead of a bare "remote rejected" line.
+          if [ -z "${SYNC_TOKEN}" ] &&
+            [ -n "$(git diff --name-only HEAD^ HEAD -- .github/workflows)" ]; then
+            echo "::error::This merge changes .github/workflows, which secrets.GITHUB_TOKEN is not allowed to push. Set the SYNC_TOKEN secret to a token with Contents and Workflows write access."
+            exit 1
+          fi
+
+          if ! push_output=$(git push origin "HEAD:${UPSTREAM_BRANCH}" 2>&1); then
+            printf '%s\n' "$push_output"
+            if grep -q 'without .workflows. permission' <<< "$push_output"; then
+              echo "::error::SYNC_TOKEN was rejected by GitHub: it is unset (GITHUB_TOKEN was used) or the GitHub App installation behind it lacks the Workflows permission. Grant Workflows: read/write, re-approve the installation, and re-run this workflow."
+            fi
+            exit 1
+          fi
+          printf '%s\n' "$push_output"
 
           # Adopt the newest upstream release tag as a tag on the fork's main so
           # the published image is built from fork HEAD (with this repo's

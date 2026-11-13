@@ -620,7 +620,10 @@ root → `go build ./...` / `go run main.go`.
 **CI** (`.github/workflows/`): `ci.yml` (build/test/lint), `codeql.yml` (security scan),
 `mutation.yml` (mutation testing), `docker.yml` + `release.yml`
 (multi-arch image + release builds), `cleanup_caches.yml`, `docs-ci.yml` (docs build),
-`sync-upstream.yml` (daily merge of upstream `main`).
+`sync-upstream.yml` (daily merge of upstream `main`; it reads the `SYNC_TOKEN`
+secret — a fine-grained PAT with `Contents` and `Workflows` read/write, or an App
+installation with the `Workflows` permission — because upstream edits
+`.github/workflows` and the default `GITHUB_TOKEN` is never allowed to push them).
 
 ---
 
